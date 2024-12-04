@@ -1,5 +1,7 @@
 <?php
 include('db.php');
+
+// Función para formatear el tamaño del archivo
 function formatSize($size) {
     if ($size >= 1073741824) {
         return number_format($size / 1073741824, 2) . ' GB';
@@ -11,31 +13,38 @@ function formatSize($size) {
         return $size . ' bytes';
     }
 }
+
+// Procesar formulario de subida
 if (isset($_POST['submit'])) {
     if (isset($_FILES['photo']) && $_FILES['photo']['error'] === 0) {
-        $name = $_FILES['photo']['name'];
+        $name = basename($_FILES['photo']['name']);
         $size = $_FILES['photo']['size'];
         $type = $_FILES['photo']['type'];
         $temp = $_FILES['photo']['tmp_name'];
         $date = date('Y-m-d H:i:s');
         $sizeFormatted = formatSize($size);
         $target_dir = "files/";
-        $target_file = $target_dir . basename($name);
-        if (move_uploaded_file($temp, $target_file)) {
-            try {
-                $stmt = $conn->prepare("INSERT INTO upload (name, size, date) VALUES (:name, :size, :date)");
-                $stmt->bindParam(':name', $name);
-                $stmt->bindParam(':size', $sizeFormatted);
-                $stmt->bindParam(':date', $date);
+        $target_file = $target_dir . $name;
 
-                if ($stmt->execute()) {
-                    header("Location: index.php");
-                    exit();
-                } else {
-                    die("Error al insertar el archivo en la base de datos.");
-                }
-            } catch (PDOException $e) {
-                die("Error al insertar archivo: " . $e->getMessage());
+        // Validar tamaño y tipo de archivo
+        $allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+        if (!in_array($type, $allowedTypes)) {
+            die("Error: Tipo de archivo no permitido.");
+        }
+
+        if ($size > 5 * 1024 * 1024) { // Máximo 5 MB
+            die("Error: El archivo supera el tamaño máximo permitido (5 MB).");
+        }
+
+        // Subir archivo
+        if (move_uploaded_file($temp, $target_file)) {
+            $stmt = $conn->prepare("INSERT INTO upload (name, size, date) VALUES (?, ?, ?)");
+            $stmt->bind_param('sss', $name, $sizeFormatted, $date);
+            if ($stmt->execute()) {
+                header("Location: index.php");
+                exit();
+            } else {
+                die("Error al insertar en la base de datos.");
             }
         } else {
             die("Error al mover el archivo.");
@@ -44,30 +53,34 @@ if (isset($_POST['submit'])) {
         die("Error al subir el archivo.");
     }
 }
+
+// Eliminar archivo
 if (isset($_GET['del'])) {
-    $del = $_GET['del'];
-    $stmt = $conn->prepare("SELECT * FROM upload WHERE id = :id");
-    $stmt->bindParam(':id', $del);
+    $del = intval($_GET['del']);
+    $stmt = $conn->prepare("SELECT * FROM upload WHERE id = ?");
+    $stmt->bind_param('i', $del);
     $stmt->execute();
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
-    if ($row) {
+    $result = $stmt->get_result();
+    if ($row = $result->fetch_assoc()) {
         $fileName = $row['name'];
         $filePath = "files/" . $fileName;
         if (file_exists($filePath)) {
             unlink($filePath);
         }
-        $stmt = $conn->prepare("DELETE FROM upload WHERE id = :id");
-        $stmt->bindParam(':id', $del);
+        $stmt = $conn->prepare("DELETE FROM upload WHERE id = ?");
+        $stmt->bind_param('i', $del);
         $stmt->execute();
-
         header("Location: index.php");
         exit();
     } else {
         die("El archivo no existe.");
     }
 }
+
+// Mostrar lista de archivos
 $stmt = $conn->query("SELECT * FROM upload ORDER BY id DESC");
 ?>
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -142,7 +155,8 @@ $stmt = $conn->query("SELECT * FROM upload ORDER BY id DESC");
                     </tr>
                 </thead>
                 <tbody>
-                    <?php while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) { ?>
+                <?php while ($row = $stmt->fetch_assoc()) { ?>
+
                     <tr>
                         <td><?php echo $row['id']; ?></td>
                         <td><?php echo $row['name']; ?></td>
@@ -163,6 +177,7 @@ $stmt = $conn->query("SELECT * FROM upload ORDER BY id DESC");
         </div>
     </div>
 </div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

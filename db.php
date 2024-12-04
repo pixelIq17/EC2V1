@@ -1,8 +1,15 @@
 <?php
-try {
-    $conn = new PDO('mysql:host=localhost;dbname=myweb', 'root', '');
-    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-} catch (PDOException $e) {
-    die("Error de conexion: " . $e->getMessage());
+$host = '18.116.63.100';
+$dbname = 'myweb';
+$user = 'root';
+$password = '';
+
+$conn = mysqli_connect($host, $user, $password, $dbname);
+
+if (!$conn) {
+    die("Error de conexión: " . mysqli_connect_error());
 }
+
+// Habilitar codificación UTF-8 para evitar problemas con caracteres especiales
+mysqli_set_charset($conn, 'utf8');
 ?>
